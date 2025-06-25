@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>🗜️ File Compressor & Decompressor</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="theme-toggle">
+    <label class="switch">
+      <input type="checkbox" id="themeSwitcher">
+      <span class="slider"></span>
+    </label>
+    <span id="themeLabel">Light Mode</span>
+  </div>
+
+  <div class="container">
+    <h1>🗜️ File Compressor & Decompressor</h1>
+
+    <div class="card">
+      <h2>📦 Compress a File</h2>
+      <div class="drop-zone" id="drop-zone">
+        <p>Drag & Drop or Click to Upload</p>
+        <input type="file" id="fileInput" hidden>
+      </div>
+      <div id="fileInfo"></div>
+      <button id="compressBtn">📦 Compress</button>
+      <div class="spinner" id="spinner" style="display:none;"></div>
+      <div id="sizeInfo"></div>
+    </div>
+
+    <div class="card">
+      <h2>🧩 Decompress a File</h2>
+      <div class="drop-zone" id="drop-zone-decompress">
+        <p>Drag & Drop .gz File Here</p>
+        <input type="file" id="fileInputDecompress" hidden>
+      </div>
+      <div id="fileInfoDecompress"></div>
+      <button id="decompressBtn">🧩 Decompress</button>
+      <div class="spinner" id="spinnerDecompress" style="display:none;"></div>
+    </div>
+
+    <footer>
+      Built with ❤️ by <a href="https://github.com/I-M-Saurav" target="_blank">Saurav Kumar</a>
+    </footer>
+  </div>
+
+  <div id="toast"></div>
+  <script>
+    const themeSwitcher = document.getElementById('themeSwitcher');
+    themeSwitcher.addEventListener('change', () => {
+      const light = themeSwitcher.checked;
+      document.documentElement.setAttribute('data-theme', light ? 'light' : 'dark');
+      document.getElementById('themeLabel').textContent = light ? 'Dark Mode' : 'Light Mode';
+    });
+
+    function showToast(msg, success = true) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.className = `show ${success ? 'success' : 'error'}`;
+      setTimeout(() => toast.className = toast.className.replace('show', ''), 3000);
+    }
+
+    function setupDropZone(zoneId, inputId, infoId, onSet) {
+      const zone = document.getElementById(zoneId);
+      const input = document.getElementById(inputId);
+      const info = document.getElementById(infoId);
+
+      zone.onclick = () => input.click();
+      zone.ondragover = e => { e.preventDefault(); zone.classList.add('hover'); };
+      zone.ondragleave = () => zone.classList.remove('hover');
+      zone.ondrop = e => {
+        e.preventDefault();
+        zone.classList.remove('hover');
+        if (e.dataTransfer.files.length) {
+          input.files = e.dataTransfer.files;
+          updateInfo();
+        }
+      };
+      input.onchange = updateInfo;
+
+      function updateInfo() {
+        const file = input.files[0];
+        if (!file) return;
+        onSet(file);
+        info.innerHTML = `<p><strong>${file.name}</strong> (${(file.size / 1024).toFixed(1)} KB)</p>`;
+      }
+    }
+
+    let compressFile = null;
+    setupDropZone('drop-zone', 'fileInput', 'fileInfo', f => compressFile = f);
+
+    document.getElementById('compressBtn').onclick = async () => {
+      if (!compressFile) return showToast('No file selected!', false);
+      document.getElementById('spinner').style.display = 'inline-block';
+
+      const formData = new FormData();
+      formData.append('file', compressFile);
+
+      const res = await fetch('/compress', { method: 'POST', body: formData });
+      document.getElementById('spinner').style.display = 'none';
+      if (!res.ok) return showToast('Compression failed!', false);
+
+      const data = await res.json();
+      const blob = await (await fetch(data.downloadPath)).blob();
+
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = compressFile.name + '.gz';
+      link.click();
+
+      const saved = ((1 - data.compressedSize / data.originalSize) * 100).toFixed(1);
+      document.getElementById('sizeInfo').innerHTML = `Original: ${(data.originalSize/1024).toFixed(1)} KB<br>Compressed: ${(data.compressedSize/1024).toFixed(1)} KB<br>Saved: ${saved}%`;
+      showToast('Compression complete!');
+    };
+
+    let decompressFile = null;
+    setupDropZone('drop-zone-decompress', 'fileInputDecompress', 'fileInfoDecompress', f => decompressFile = f);
+
+    document.getElementById('decompressBtn').onclick = async () => {
+      if (!decompressFile) return showToast('No file selected!', false);
+      document.getElementById('spinnerDecompress').style.display = 'inline-block';
+
+      const formData = new FormData();
+      formData.append('file', decompressFile);
+      const res = await fetch('/decompress', { method: 'POST', body: formData });
+
+      document.getElementById('spinnerDecompress').style.display = 'none';
+      if (!res.ok) return showToast('Decompression failed!', false);
+
+      const blob = await res.blob();
+      const contentDisposition = res.headers.get('Content-Disposition');
+      let filename = 'output-file';
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match) filename = match[1];
+      }
+
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = filename;
+      link.click();
+
+      showToast('Decompression complete!');
+    };
+  </script>
+</body>
+</html>

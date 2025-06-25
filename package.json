@@ -1,0 +1,16 @@
+{
+  "name": "compression-portal",
+  "version": "1.0.0",
+  "description": "A simple data compression and decompression portal using Node.js and Express",
+  "main": "server.js",
+  "scripts": {"start": "node server.js"},
+  "dependencies": {
+    "express": "^4.21.2",
+    "multer": "^1.4.4",
+    "zlib": "^1.0.5"
+  },
+    "engines": {
+    "node": ">=14"
+  }
+
+}
