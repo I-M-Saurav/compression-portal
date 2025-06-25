@@ -60,26 +60,34 @@ app.post('/decompress', upload.single('file'), (req, res) => {
 
   try {
     const buffer = fs.readFileSync(inputPath);
+    
+    // Ensure the file is actually a valid GZIP by checking for the proper header
+    const isGzip = buffer.slice(0, 3).toString('hex') === '1f8b08'; // GZIP header check
+    
+    if (!isGzip) {
+      return res.status(400).send('File is not a valid GZIP file.');
+    }
 
     let compressedData;
     let filename;
 
-    // Attempt to extract our metadata header
+    // Attempt to extract our metadata header if present
     try {
-      const metaLen       = buffer.readUInt32BE(0);
-      const metaBuf       = buffer.slice(4, 4 + metaLen);
-      const meta          = JSON.parse(metaBuf.toString('utf-8'));
+      const metaLen = buffer.readUInt32BE(0);
+      const metaBuf = buffer.slice(4, 4 + metaLen);
+      const meta = JSON.parse(metaBuf.toString('utf-8'));
 
-      filename        = meta.filename || req.file.originalname.replace(/\.gz$/, '');
-      compressedData  = buffer.slice(4 + metaLen);
+      filename = meta.filename || req.file.originalname.replace(/\.gz$/, '');
+      compressedData = buffer.slice(4 + metaLen);
     } catch {
-      // No valid header → treat entire buffer as gzip
+      // If no metadata, treat the file as a standard .gz file
       compressedData = buffer;
-      filename       = req.file.originalname.replace(/\.gz$/, '');
+      filename = req.file.originalname.replace(/\.gz$/, '');
     }
 
+    // Perform decompression
     const decompressed = zlib.gunzipSync(compressedData);
-    const outPath      = path.join('decompressed', `${Date.now()}-${filename}`);
+    const outPath = path.join('decompressed', `${Date.now()}-${filename}`);
     fs.writeFileSync(outPath, decompressed);
     fs.unlinkSync(inputPath);
 
